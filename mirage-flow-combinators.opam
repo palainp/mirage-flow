@@ -12,7 +12,6 @@ depends: [
   "fmt" {>= "0.8.7"}
   "lwt" {>= "4.0.0"}
   "logs"
-  "cstruct" {>= "6.0.0"}
   "mirage-clock" {>= "3.0.0"}
   "mirage-flow" {= version}
 ]

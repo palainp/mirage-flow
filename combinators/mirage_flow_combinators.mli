@@ -86,7 +86,7 @@ module F: sig
 
   include Mirage_flow.S
 
-  type refill = Cstruct.t -> int -> int -> int Lwt.t
+  type refill = Bytes.t -> int -> int -> int Lwt.t
   (** The type for refill functions. *)
 
   val make:
@@ -122,26 +122,6 @@ module F: sig
 
   val strings: ?input:string list -> ?output:bytes list -> unit -> flow
   (** The flow built using {!input_strings} and {!output_bytess}. *)
-
-  (** {1 Cstruct buffers flows} *)
-
-  val input_cstruct: Cstruct.t -> refill
-  (** Same as {!input_string} but for {!Cstruct.t} buffers. *)
-
-  val output_cstruct: Cstruct.t -> refill
-  (** Same as {!output_string} buf for {!Cstruct.t} buffers. *)
-
-  val cstruct: ?input:Cstruct.t -> ?output:Cstruct.t -> unit -> flow
-  (** Same as {!string} but for {!Cstruct.t} buffers. *)
-
-  val input_cstructs: Cstruct.t list -> refill
-  (** Same as {!input_strings} but for {!Cstruct.t} buffers. *)
-
-  val output_cstructs: Cstruct.t list -> refill
-  (** Same as {!output_strings} but for {!Cstruct.t} buffers. *)
-
-  val cstructs: ?input:Cstruct.t list -> ?output:Cstruct.t list -> unit -> flow
-  (** Same as {!strings} but for {!Cstruct.t} buffers. *)
 
 end
 

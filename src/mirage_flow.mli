@@ -53,7 +53,7 @@ module type S = sig
   (** The type for flows. A flow represents the state of a single reliable
       stream that is connected to an endpoint. *)
 
-  val read: flow -> (Cstruct.t or_eof, error) result Lwt.t
+  val read: flow -> (Bytes.t or_eof, error) result Lwt.t
   (** [read flow] blocks until some data is available and returns a fresh buffer
       containing it.
 
@@ -64,7 +64,7 @@ module type S = sig
       called on the [flow] by the client. Once [read] returned [`Eof] or an
       error, no subsequent [read] call will be successful. *)
 
-  val write: flow -> Cstruct.t -> (unit, write_error) result Lwt.t
+  val write: flow -> Bytes.t -> (unit, write_error) result Lwt.t
   (** [write flow buffer] writes a buffer to the flow. There is no indication
       when the buffer has actually been sent and, therefore, it must not be
       reused. The contents may be transmitted in separate packets, depending on
@@ -80,7 +80,7 @@ module type S = sig
       the [flow] by the client. Once [write] returned an error, no subsequent
       [write] or [writev] call will be successful. *)
 
-  val writev: flow -> Cstruct.t list -> (unit, write_error) result Lwt.t
+  val writev: flow -> Bytes.t list -> (unit, write_error) result Lwt.t
   (** [writev flow buffers] writes a sequence of buffers to the flow. There is
       no indication when the buffers have actually been sent and, therefore,
       they must not be reused. The result [Ok ()] indicates success,

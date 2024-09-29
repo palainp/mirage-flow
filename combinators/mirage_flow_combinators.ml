@@ -138,12 +138,12 @@ struct
         Lwt.return (Ok ())
       | Ok (`Data buffer) ->
         read_ops := Int64.succ !read_ops;
-        read_bytes := Int64.(add !read_bytes (of_int @@ Cstruct.length buffer));
+        read_bytes := Int64.(add !read_bytes (of_int @@ Bytes.length buffer));
         B.write b buffer
         >>= function
         | Ok () ->
           write_ops := Int64.succ !write_ops;
-          write_bytes := Int64.(add !write_bytes (of_int @@ Cstruct.length buffer));
+          write_bytes := Int64.(add !write_bytes (of_int @@ Bytes.length buffer));
           loop ()
         | Error e ->
           finish := Some (Clock.elapsed_ns ());
@@ -224,7 +224,7 @@ module F = struct
 
   let (>>=) = Lwt.bind
 
-  type refill = Cstruct.t -> int -> int -> int Lwt.t
+  type refill = Bytes.t -> int -> int -> int Lwt.t
 
   type error
   let pp_error ppf (_:error) =
@@ -247,7 +247,7 @@ module F = struct
     close: unit -> unit Lwt.t;
     input: refill;
     output: refill;
-    mutable buf: Cstruct.t;
+    mutable buf: Bytes.t;
     mutable ic_closed: bool;
     mutable oc_closed: bool;
   }
@@ -255,7 +255,7 @@ module F = struct
   let default_buffer_size = 4096
 
   let make ?(close=fun () -> Lwt.return_unit) ?input ?output () =
-    let buf = Cstruct.create default_buffer_size in
+    let buf = Bytes.create default_buffer_size in
     let ic_closed = input = None in
     let oc_closed = output = None in
     let input = match input with None -> zero | Some x -> x in
@@ -291,25 +291,17 @@ module F = struct
     let output = match output with None -> None | Some x -> Some (fn_o x) in
     make ?input ?output ()
 
-  let input_string = input_fn String.length Cstruct.blit_from_string
-  let output_bytes = output_fn Bytes.length Cstruct.blit_to_bytes
+  let input_string = input_fn String.length Bytes.blit_string
+  let output_bytes = output_fn Bytes.length Bytes.blit
   let string = mk input_string output_bytes
-
-  let input_cstruct = input_fn Cstruct.length Cstruct.blit
-  let output_cstruct = output_fn Cstruct.length Cstruct.blit
-  let cstruct = mk input_cstruct output_cstruct
 
   let input_strings = iter input_string
   let output_bytess = iter output_bytes
   let strings = mk input_strings output_bytess
 
-  let input_cstructs = iter input_cstruct
-  let output_cstructs = iter output_cstruct
-  let cstructs = mk input_cstructs output_cstructs
-
   let refill ch =
-    if Cstruct.length ch.buf = 0 then (
-      let buf = Cstruct.create default_buffer_size in
+    if Bytes.length ch.buf = 0 then (
+      let buf = Bytes.create default_buffer_size in
       ch.buf <- buf
     )
 
@@ -322,8 +314,9 @@ module F = struct
         ch.ic_closed <- true;
         Lwt.return (Ok `Eof);
       ) else (
-        let ret = Cstruct.sub ch.buf 0 n in
-        let buf = Cstruct.shift ch.buf n in
+        let len = Bytes.length ch.buf in
+        let ret = Bytes.sub ch.buf 0 n in
+        let buf = Bytes.sub ch.buf n (len-n) in
         ch.buf <- buf;
         Lwt.return (Ok (`Data ret))
       )
@@ -332,7 +325,7 @@ module F = struct
   let write ch buf =
     if ch.oc_closed then Lwt.return @@ Error `Closed
     else (
-      let len = Cstruct.length buf in
+      let len = Bytes.length buf in
       let rec aux off =
         if off = len then Lwt.return (Ok ())
         else (
@@ -410,8 +403,8 @@ let forward ?(verbose=false) ~src ~dst () =
     | Ok (`Data buf) ->
       Log.debug (fun l ->
           let payload =
-            if verbose then Fmt.str "[%S]" @@ Cstruct.to_string buf
-            else Fmt.str "%d bytes" (Cstruct.length buf)
+            if verbose then Fmt.str "[%S]" @@ Bytes.to_string buf
+            else Fmt.str "%d bytes" (Bytes.length buf)
           in
           l "forward[%a => %a] %s" pp src pp dst payload);
       write dst buf >>= function

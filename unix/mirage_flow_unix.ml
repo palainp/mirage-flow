@@ -22,12 +22,12 @@ module Log = (val Logs.src_log src : Logs.LOG)
 module Make (F: Mirage_flow.S) = struct
 
   let reader t =
-    let frag = ref (Cstruct.create 0) in
+    let frag = ref (Bytes.create 0) in
     let rec aux buf ofs len =
       if len = 0
       then Lwt.return 0
       else
-        let available = Cstruct.length !frag in
+        let available = Bytes.length !frag in
         if available = 0 then begin
           F.read t >>= function
           | Ok (`Data b) ->
@@ -38,14 +38,15 @@ module Make (F: Mirage_flow.S) = struct
             Lwt.fail_with @@ Fmt.str "Lwt_io_flow.reader: %a" F.pp_error e
         end else begin
           let n = min available len in
-          Cstruct.blit !frag 0 (Cstruct.of_bigarray buf) ofs n;
-          frag := Cstruct.shift !frag n;
+          Lwt_bytes.blit_from_bytes !frag 0 buf ofs n;
+          frag := Bytes.sub !frag n (available-n);
           Lwt.return n
         end in
     aux
 
   let writer t buf ofs len =
-    let b = Cstruct.sub (Cstruct.of_bigarray buf) ofs len in
+    let b = Bytes.create len in
+    Lwt_bytes.blit_to_bytes buf ofs b 0 len ;
     F.write t b >>= function
     | Ok ()          -> Lwt.return len
     | Error `Closed  -> Lwt.return 0
@@ -112,12 +113,12 @@ module Fd = struct
 
   let read t =
     Lwt.catch (fun () ->
-        read_all t >|= fun buf -> Ok (`Data (Cstruct.of_bytes buf))
+        read_all t >|= fun buf -> Ok (`Data buf)
       ) (function Failure _ -> Lwt.return (Ok `Eof) | e -> err e)
 
   let write t b =
     Lwt.catch (fun () ->
-        write_all t (Cstruct.to_bytes b) >|= fun () -> Ok ()
+        write_all t b >|= fun () -> Ok ()
       ) (fun e  -> err e)
 
   let close t = Lwt_unix.close t
@@ -132,7 +133,7 @@ module Fd = struct
 
   let writev t bs =
     Lwt.catch (fun () ->
-        Lwt_list.iter_s (fun b -> write_all t (Cstruct.to_bytes b)) bs
+        Lwt_list.iter_s (fun b -> write_all t b) bs
         >|= fun () -> Ok ()
       ) (fun e -> err e)
 

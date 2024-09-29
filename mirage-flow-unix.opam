@@ -13,7 +13,6 @@ depends: [
   "logs"
   "mirage-flow" {= version}
   "lwt" {>= "4.0.0"}
-  "cstruct" {>= "6.0.0"}
   "alcotest" {with-test}
   "mirage-flow-combinators" {with-test & = version}
 ]

@@ -17,14 +17,14 @@
 open Lwt.Infix
 open Mirage_flow_combinators
 
-let pp_buf ppf buf = Fmt.string ppf (Cstruct.to_string buf)
-let eq_buf b1 b2 = Cstruct.to_string b1 = Cstruct.to_string b2
+let pp_buf ppf buf = Fmt.string ppf (Bytes.to_string buf)
+let eq_buf = Bytes.equal
 
-let cstruct = Alcotest.testable pp_buf eq_buf
+let bytes = Alcotest.testable pp_buf eq_buf
 let fail fmt = Fmt.kstr (fun s -> Alcotest.fail s) fmt
 
-let check_buffer = Alcotest.(check cstruct)
-let check_buffers = Alcotest.(check @@ list cstruct)
+let check_buffer = Alcotest.(check bytes)
+let check_buffers = Alcotest.(check @@ list bytes)
 
 let check_ok_buffer msg buf = function
   | Ok (`Data b) -> check_buffer msg buf b
@@ -49,14 +49,12 @@ let check_eof msg = function
   | Ok _    -> fail "%s: ok" msg
   | Error e -> fail "%s: error=%a" msg F.pp_error e
 
-let cs str = Cstruct.of_string str
-let cb str = Cstruct.of_bytes str
+let bs str = Bytes.of_string str
 
-let css = List.map cs
-let cbs = List.map cb
+let bss = List.map bs
 
 let filter x =
-  let zero = Cstruct.of_string "" in
+  let zero = Bytes.empty in
   List.filter ((<>) zero) x
 
 let input_string () =
@@ -64,8 +62,8 @@ let input_string () =
   let ic = F.string ~input () in
   F.read ic >>= fun x1 ->
   F.read ic >>= fun x2 ->
-  F.write ic (cs "hihi") >>= fun r ->
-  check_ok_buffer "read 1" (cs input) x1;
+  F.write ic (bs "hihi") >>= fun r ->
+  check_ok_buffer "read 1" (bs input) x1;
   check_eof "read 2" x2;
   check_closed "write"  r;
   Lwt.return_unit
@@ -73,11 +71,11 @@ let input_string () =
 let output_string () =
   let output = Bytes.of_string "xxxxxxxxxx" in
   let oc = F.string ~output () in
-  F.write oc (cs  "hell") >>= fun x1 ->
-  F.write oc (cs   "o! ") >>= fun x2 ->
-  F.write oc (cs "world") >>= fun x3 ->
+  F.write oc (bs  "hell") >>= fun x1 ->
+  F.write oc (bs   "o! ") >>= fun x2 ->
+  F.write oc (bs "world") >>= fun x3 ->
   F.read oc >>= fun r ->
-  check_buffer "result" (cb output) (cs "hello! wor");
+  check_buffer "result" output (bs "hello! wor");
   check_ok_write "write 1" x1;
   check_ok_write "write 2" x2;
   check_closed   "write 3" x3;
@@ -93,11 +91,11 @@ let input_strings () =
   F.read ic >>= fun x4 ->
   F.read ic >>= fun y ->
   F.read ic >>= fun z ->
-  F.write ic (cs "hihi") >>= fun w ->
-  check_ok_buffer "read 1" (cs  "123") x1;
-  check_ok_buffer "read 2" (cs   "45") x2;
-  check_ok_buffer "read 3" (cs "6789") x3;
-  check_ok_buffer "read 4" (cs    "0") x4;
+  F.write ic (bs "hihi") >>= fun w ->
+  check_ok_buffer "read 1" (bs  "123") x1;
+  check_ok_buffer "read 2" (bs   "45") x2;
+  check_ok_buffer "read 3" (bs "6789") x3;
+  check_ok_buffer "read 4" (bs    "0") x4;
   check_eof       "read 5" y;
   check_eof       "read 6" z;
   check_closed    "write"  w;
@@ -106,69 +104,11 @@ let input_strings () =
 let output_strings () =
   let output = List.map Bytes.of_string ["xxx"; ""; "xx"; "xxx"; ] in
   let oc = F.strings ~output () in
-  F.write oc (cs  "hell") >>= fun x1 ->
-  F.write oc (cs   "o! ") >>= fun x2 ->
-  F.write oc (cs "world") >>= fun x3 ->
+  F.write oc (bs  "hell") >>= fun x1 ->
+  F.write oc (bs   "o! ") >>= fun x2 ->
+  F.write oc (bs "world") >>= fun x3 ->
   F.read oc >>= fun r ->
-  check_buffers "result" (filter (cbs output)) (css ["hel"; "lo"; "! w"]);
-  check_ok_write "write 1" x1;
-  check_ok_write "write 2" x2;
-  check_closed   "write 3" x3;
-  check_eof     "read"    r;
-  Lwt.return_unit
-
-let input_cstruct () =
-  let input = Cstruct.of_string "xxxxxxxxxx" in
-  let ic = F.cstruct ~input () in
-  F.read ic >>= fun x1 ->
-  F.read ic >>= fun x2 ->
-  F.write ic (cs "hihi") >>= fun r ->
-  check_ok_buffer "read 1" input x1;
-  check_eof       "read 2" x2;
-  check_closed    "write"  r;
-  Lwt.return_unit
-
-let output_cstruct () =
-  let output = Cstruct.of_string "xxxxxxxxxx" in
-  let oc = F.cstruct ~output () in
-  F.write oc (cs  "hell") >>= fun x1 ->
-  F.write oc (cs   "o! ") >>= fun x2 ->
-  F.write oc (cs "world") >>= fun x3 ->
-  F.read oc >>= fun r ->
-  check_buffer  "result" output (cs "hello! wor");
-  check_ok_write "write 1" x1;
-  check_ok_write "write 2" x2;
-  check_closed   "write 3" x3;
-  check_eof     "read"    r;
-  Lwt.return_unit
-
-let input_cstructs () =
-  let inputs = List.map cs [ "123"; "45"; ""; "6789"; "0" ] in
-  let ic = F.cstructs ~input:inputs () in
-  F.read ic >>= fun x1 ->
-  F.read ic >>= fun x2 ->
-  F.read ic >>= fun x3 ->
-  F.read ic >>= fun x4 ->
-  F.read ic >>= fun y ->
-  F.read ic >>= fun z ->
-  F.write ic (cs "hihi") >>= fun w ->
-  check_ok_buffer "read 1" (cs  "123") x1;
-  check_ok_buffer "read 2" (cs   "45") x2;
-  check_ok_buffer "read 3" (cs "6789") x3;
-  check_ok_buffer "read 4" (cs    "0") x4;
-  check_eof       "read 5 "y;
-  check_eof       "read 6" z;
-  check_closed    "read 7" w;
-  Lwt.return_unit
-
-let output_cstructs () =
-  let output = List.map cs [ ""; "xxx"; "xx"; "xxx" ] in
-  let oc = F.cstructs ~output () in
-  F.write oc (cs  "hell") >>= fun x1 ->
-  F.write oc (cs   "o! ") >>= fun x2 ->
-  F.write oc (cs "world") >>= fun x3 ->
-  F.read oc >>= fun r ->
-  check_buffers "result" (filter output) (css ["hel"; "lo"; "! w"]);
+  check_buffers "result" (filter output) (bss ["hel"; "lo"; "! w"]);
   check_ok_write "write 1" x1;
   check_ok_write "write 2" x2;
   check_closed   "write 3" x3;
@@ -181,16 +121,16 @@ let input_lwt_io () =
   let ic = F.strings ~input:["1"; "234"; "56"; "78\n90"] () in
   let lic = Lwt_io_flow.ic ic in
   Lwt_io.read_line lic >>= fun l ->
-  check_buffer "result" (cs "12345678") (cs l);
+  check_buffer "result" (bs "12345678") (bs l);
   Lwt.return_unit
 
 let output_lwt_io () =
-  let output = css ["xxxx";"xxxx"; "xxxxxx"] in
-  let oc = F.cstructs ~output () in
+  let output = bss ["xxxx";"xxxx"; "xxxxxx"] in
+  let oc = F.strings ~output () in
   let loc = Lwt_io_flow.oc oc in
   Lwt_io.write_line loc "Hello world!" >>= fun () ->
   Lwt_io.flush loc >>= fun () ->
-  check_buffers "result" (css ["Hell"; "o wo"; "rld!\nx"]) output;
+  check_buffers "result" (bss ["Hell"; "o wo"; "rld!\nx"]) output;
   Lwt.return_unit
 
 let run f () = Lwt_main.run (f ())
@@ -205,16 +145,6 @@ let strings = [
   "output", `Quick, run output_strings;
 ]
 
-let cstruct = [
-  "input" , `Quick, run input_cstruct;
-  "output", `Quick, run output_cstruct;
-]
-
-let cstructs = [
-  "input" , `Quick, run input_cstructs;
-  "output", `Quick, run output_cstructs;
-]
-
 let lwt_io = [
   "input" , `Quick, run input_lwt_io;
   "output", `Quick, run output_lwt_io;
@@ -223,7 +153,5 @@ let () =
   Alcotest.run "mirage-flow" [
     "string"  , string;
     "strings" , strings;
-    "cstruct" , cstruct;
-    "cstructs", cstructs;
     "lwt-io"  , lwt_io;
   ]
